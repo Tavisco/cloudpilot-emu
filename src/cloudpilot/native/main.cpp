@@ -65,7 +65,7 @@ struct Options {
 void handleSuspend() {
     if (!SuspendManager::IsSuspended()) return;
     SuspendContext& context = SuspendManager::GetContext();
-    // Clipboard integration disabled for bare-metal PoC
+    // Clipboard integration disabled
     switch (context.GetKind()) {
         case SuspendContext::Kind::clipboardCopy:
             context.AsContextClipboardCopy().Resume();
