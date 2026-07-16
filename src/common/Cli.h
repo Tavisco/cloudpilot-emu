@@ -2,7 +2,15 @@
 #define _CLI_H_
 
 #include <functional>
+#if __cplusplus >= 201703L
 #include <optional>
+#else
+#include <experimental/optional>
+namespace std {
+    using std::experimental::optional;
+    using std::experimental::nullopt;
+}
+#endif
 #include <string>
 #include <vector>
 

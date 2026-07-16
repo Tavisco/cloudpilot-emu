@@ -1,17 +1,19 @@
-#ifndef _SDL_MAIN_LOOP_H_
-#define _SDL_MAIN_LOOP_H_
+#ifndef _MAIN_LOOP_H_
+#define _MAIN_LOOP_H_
 
-#include <SDL.h>
+#include <linux/fb.h>
+
+#include <cstdint>
 
 #include "ButtonEvent.h"
-#include "EventHandler.h"
 #include "Frame.h"
 #include "Platform.h"
 #include "ScreenDimensions.h"
 
 class MainLoop {
    public:
-    MainLoop(SDL_Window* window, SDL_Renderer* renderer, int scale);
+    MainLoop(uint8_t* fbp, struct fb_var_screeninfo vinfo, struct fb_fix_screeninfo finfo,
+             int scale);
     ~MainLoop();
 
     bool IsRunning() const;
@@ -19,17 +21,15 @@ class MainLoop {
     void Cycle();
 
    private:
-    void LoadSilkscreen();
-
-    void DrawSilkscreen(SDL_Renderer* renderer);
-
     void UpdateScreen(bool fullRedraw);
+    void InitTouch();
+    void PollTouch();
+    void ProcessPalmTouch(int phys_x, int phys_y, bool pen_down);
 
    private:
-    SDL_Renderer* renderer{nullptr};
-    SDL_Texture* lcdTexture{nullptr};
-    SDL_Texture* lcdTempTexture{nullptr};
-    SDL_Texture* silkscreenTexture{nullptr};
+    uint8_t* fbp;
+    struct fb_var_screeninfo vinfo;
+    struct fb_fix_screeninfo finfo;
 
     int scale{1};
     ScreenDimensions screenDimensions;
@@ -39,8 +39,6 @@ class MainLoop {
     double clockEmu{0};
 
     long lastScreenRefreshAt = 0;
-
-    EventHandler eventHandler;
 };
 
-#endif  // _SDL_MAIN_LOOP_H_
+#endif  // _MAIN_LOOP_H_

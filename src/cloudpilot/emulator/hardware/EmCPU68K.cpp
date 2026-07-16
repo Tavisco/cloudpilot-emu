@@ -525,34 +525,46 @@ Bool EmCPU68K::ExecuteSpecial(uint32 maxCycles) {
 //		� EmCPU68K::ExecuteStoppedLoop
 // ---------------------------------------------------------------------------
 
-Bool EmCPU68K::ExecuteStoppedLoop(uint32 maxCycles) {
+bool EmCPU68K::ExecuteStoppedLoop(uint32 maxCycles) {
     EmSession* session = fSession;
 
     EmAssert(session);
     EmAssert(regs.intmask < 7);
     EmAssert(!SuspendManager::IsSuspended());
 
-    // Do not run cycleSlowly on each call if single stepping
     int counter = maxCycles ? 0 : 1;
-
-    // While the CPU is stopped (because a STOP instruction was
-    // executed) do some idle tasks.
 
     do {
         uint32 cyclesToNextInterrupt =
             EmHAL::CyclesToNextInterrupt(session->GetSystemCycles() + fCurrentCycles);
-        fCurrentCycles += ((gSession->IsPowerOn() && cyclesToNextInterrupt > 0 &&
-                            cyclesToNextInterrupt != 0xffffffff)
-                               ? cyclesToNextInterrupt
-                               : (maxCycles > 0 ? maxCycles : 1));
 
+        uint32 advance = 1;
+        if (!gSession->IsPowerOn() || cyclesToNextInterrupt == 0xffffffff) {
+            // No interrupts scheduled, fast forward to the end of the requested cycle block
+            advance = maxCycles > fCurrentCycles ? maxCycles - fCurrentCycles : 1;
+        } else if (cyclesToNextInterrupt == 0) {
+            // A masked interrupt is pending. Step time forward by a small, safe chunk
+            // to allow hardware timers to naturally reach the unmasked interrupt.
+            advance = 16;
+        } else {
+            // Fast forward to the exact time of the next scheduled interrupt
+            advance = cyclesToNextInterrupt;
+        }
+
+        // Failsafe: Never overshoot maxCycles in a single loop
+        if (fCurrentCycles + advance > maxCycles) {
+            advance = maxCycles - fCurrentCycles;
+        }
+        if (advance == 0) advance = 1;
+
+        fCurrentCycles += advance;
         CYCLE(true);
 
         // Process an interrupt (see if it's time to wake up).
-
         if (regs.spcflags & (SPCFLAG_INT | SPCFLAG_DOINT)) {
             int32 interruptLevel = EmHAL::GetInterruptLevel();
 
+            // Clear flags. If the interrupt is masked, the hardware will re-assert it next CYCLE
             regs.spcflags &= ~(SPCFLAG_INT | SPCFLAG_DOINT);
 
             if ((interruptLevel != -1) && (interruptLevel > regs.intmask)) {
@@ -560,9 +572,6 @@ Bool EmCPU68K::ExecuteStoppedLoop(uint32 maxCycles) {
                 m68k_setstopped(0);
             }
         }
-
-        if (regs.stopped && gSession->IsPowerOn())
-            logPrintf("WARNING: CPU failed to wake up after %u cycles", cyclesToNextInterrupt);
 
         if (fCurrentCycles >= maxCycles) return true;
 

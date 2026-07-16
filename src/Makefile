@@ -1,4 +1,4 @@
-SUBDIRS = common skins cloudpilot fstools vfs uarm
+SUBDIRS = common skins cloudpilot fstools vfs
 
 all: bin emscripten
 
