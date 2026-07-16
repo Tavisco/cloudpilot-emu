@@ -1,30 +1,17 @@
 #include "Cli.h"
 
 namespace cli {
-    // A dummy storage vector to satisfy GetCommands() if called
     static std::vector<Command> dummy_commands;
 
-    void AddCommands(const std::vector<Command>& commands) {
-        // No-op stub
-    }
+    void AddCommands(const std::vector<Command>& commands) {}
 
-    const Command* GetCommand(const std::string& name) {
-        return nullptr; // Stub
-    }
+    const Command* GetCommand(const std::string& name) { return nullptr; }
 
-    const std::vector<Command>& GetCommands() {
-        return dummy_commands; // Return the empty static vector
-    }
+    const std::vector<Command>& GetCommands() { return dummy_commands; }
 
-    void Start(std::optional<std::string> scriptFile) {
-        // No-op stub
-    }
+    void Start(std::optional<std::string> scriptFile) {}
 
-    void Stop() {
-        // No-op stub
-    }
+    void Stop() {}
 
-    bool Execute(void* context) {
-        return false; // Stub: return false so the emulator doesn't spin in a loop
-    }
-} // namespace cli
+    bool Execute(void* context) { return false; }
+}  // namespace cli

@@ -167,7 +167,6 @@ void run(const Options& options) {
         if (gSession->GetDevice().GetScreenDimensions() != screenDimensionsKind) {
             cout << "Diff dimensions" << endl;
             screenDimensionsKind = gSession->GetDevice().GetScreenDimensions();
-            // In a real FB driver, you'd handle clearing the screen and updating scales here.
             mainLoop = make_unique<MainLoop>(fbp, vinfo, finfo, scale);
         }
 

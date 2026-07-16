@@ -25,9 +25,8 @@ constexpr uint32 PALETTE_GRAYSCALE_16[] = {
     0xff626262, 0xff545454, 0xff464646, 0xff383838, 0xff2a2a2a, 0xff1c1c1c, 0xff0e0e0e, 0xff000000};
 
 constexpr long SCREEN_REFRESH_GRACE_TIME = 10;
-constexpr int TOUCH_MOVE_THROTTLE = 25;  // 25ms throttle from the reference code
+constexpr int TOUCH_MOVE_THROTTLE = 25;
 
-// Helper to convert 32-bit ARGB to 16-bit RGB565 for the Ingenic LCD interface
 inline uint16_t RGB888toRGB565(uint32_t color) {
     uint32_t r = (color >> 16) & 0xFF;
     uint32_t g = (color >> 8) & 0xFF;
@@ -35,23 +34,19 @@ inline uint16_t RGB888toRGB565(uint32_t color) {
     return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
 }
 
-// Global backbuffer to prevent screen tearing and unaligned memory accesses
 static std::vector<uint8_t> g_backbuffer;
 static bool g_backbuffer_initialized = false;
 
-// Global touch state
 static int touch_fd = -1;
 static int current_phys_x = 0;
 static int current_phys_y = 0;
 static bool is_pen_down = false;
 
-// Throttling and state tracking for Palm OS event queue
 static bool was_pen_down = false;
 static int last_palm_x = -1;
 static int last_palm_y = -1;
 static long lastTouchMove = 0;
 
-// Fast, cache-friendly block drawing template (Guarantees MIPS memory alignment)
 template <typename T>
 inline void DrawScaledBlock(std::vector<uint8_t>& bg, uint32_t x, uint32_t y, int destScaleX,
                             int destScaleY, uint32_t line_length, uint32_t totalOffsetX,
@@ -91,18 +86,15 @@ MainLoop::MainLoop(uint8_t* fbp, struct fb_var_screeninfo vinfo, struct fb_fix_s
             for (size_t i = 0; i < bufferSize / 2; ++i) ptr[i] = bg16;
         }
 
-        // Push clear state to the hardware framebuffer immediately
+        // Push clear state to the hardware framebuffer
         memcpy(fbp, g_backbuffer.data(), bufferSize);
         g_backbuffer_initialized = true;
     }
 
-    // Initialize Touch Input
     InitTouch();
 }
 
 MainLoop::~MainLoop() {
-    // Backbuffer cleans itself up via vector destructor
-
     // Cleanup touch file descriptor
     if (touch_fd >= 0) {
         close(touch_fd);
@@ -134,10 +126,6 @@ void MainLoop::PollTouch() {
 
     // Read all pending events
     while (read(touch_fd, &ev, sizeof(ev)) > 0) {
-        // Debug: Print every event type we see
-        // This is noisy but will show us if the kernel is sending *anything*
-        // printf("DEBUG: Event Type: %d, Code: %d, Value: %d\n", ev.type, ev.code, ev.value);
-
         if (ev.type == EV_ABS) {
             if (ev.code == 53) {
                 current_phys_x = ev.value;
@@ -147,13 +135,10 @@ void MainLoop::PollTouch() {
                 sync_needed = true;
             }
         } else if (ev.type == EV_KEY && ev.code == BTN_TOUCH) {
-            // printf("DEBUG: Touch State Changed: %s\n", (ev.value ? "DOWN" : "UP"));
             is_pen_down = (ev.value != 0);
             sync_needed = true;
         } else if (ev.type == EV_SYN) {
             if (sync_needed) {
-                // printf("DEBUG: Sync event triggered, processing coordinate (%d, %d)\n",
-                //        current_phys_x, current_phys_y);
                 ProcessPalmTouch(current_phys_x, current_phys_y, is_pen_down);
                 sync_needed = false;
             }
@@ -165,20 +150,16 @@ void MainLoop::ProcessPalmTouch(int phys_x, int phys_y, bool pen_down) {
     uint32_t emuPixelWidth = 160 * scale;
     uint32_t emuPixelHeight = 160 * scale;
 
-    // Calculate offsets exactly as done in UpdateScreen
     uint32_t drawOffsetX =
         vinfo.xoffset + ((vinfo.xres > emuPixelWidth) ? (vinfo.xres - emuPixelWidth) / 2 : 0);
     uint32_t drawOffsetY =
         vinfo.yoffset + ((vinfo.yres > emuPixelHeight) ? (vinfo.yres - emuPixelHeight) / 2 : 0);
 
-    // Subtract the borders to get coordinates relative to the Palm screen
     int relative_x = phys_x - drawOffsetX;
     int relative_y = phys_y - drawOffsetY;
 
-    // Out-of-bounds check
     if (relative_x < 0 || relative_x >= (int)emuPixelWidth || relative_y < 0 ||
         relative_y >= (int)emuPixelHeight) {
-        // If they dragged off-screen, ensure the emulator knows the pen was lifted
         if (was_pen_down && !pen_down) {
             gSession->QueuePenEvent(PenEvent::up());
             was_pen_down = false;
@@ -186,7 +167,6 @@ void MainLoop::ProcessPalmTouch(int phys_x, int phys_y, bool pen_down) {
         return;
     }
 
-    // Downscale back to native Palm coordinates
     int palm_x = relative_x / scale;
     int palm_y = relative_y / scale;
 
@@ -194,7 +174,6 @@ void MainLoop::ProcessPalmTouch(int phys_x, int phys_y, bool pen_down) {
 
     printf("DEBUG: PALM (%d, %d)\n", palm_x, palm_y);
 
-    // Direct Session Queue Logic (matching EventHandler.cpp)
     if (pen_down) {
         if (!was_pen_down) {
             // HandlePenDown
@@ -204,7 +183,7 @@ void MainLoop::ProcessPalmTouch(int phys_x, int phys_y, bool pen_down) {
             last_palm_y = palm_y;
             lastTouchMove = currentMillis;
         } else {
-            // HandlePenMove (Throttled)
+            // HandlePenMove
             if ((currentMillis - lastTouchMove > TOUCH_MOVE_THROTTLE) &&
                 (palm_x != last_palm_x || palm_y != last_palm_y)) {
                 gSession->QueuePenEvent(PenEvent::down(palm_x, palm_y));
@@ -220,15 +199,12 @@ void MainLoop::ProcessPalmTouch(int phys_x, int phys_y, bool pen_down) {
     }
 }
 
-bool MainLoop::IsRunning() const {
-    return true;  // Infinite loop, exit via Ctrl+C or kill
-}
+bool MainLoop::IsRunning() const { return true; }
 
 void MainLoop::Cycle() {
     const long millis = Platform::GetMilliseconds();
     const uint32 clocksPerSecond = gSession->GetClocksPerSecond();
 
-    // Poll for hardware inputs once per cycle iteration
     PollTouch();
 
     if (!gDebugger.IsStopped()) {
@@ -255,7 +231,7 @@ void MainLoop::Cycle() {
         gSystemState.MarkScreenClean();
     } else if (!SuspendManager::IsSuspended() && !gDebugger.IsStopped() &&
                !gDebugger.IsStepping()) {
-        usleep(16000);  // 16 ms in microseconds
+        usleep(16000);
     }
 }
 
@@ -263,11 +239,9 @@ void MainLoop::UpdateScreen(bool fullRedraw) {
     if (gSession->IsPowerOn() && EmHAL::CopyLCDFrame(frame, fullRedraw)) {
         uint8* buffer = frame.GetBuffer();
 
-        // Total scale applied to each Palm pixel
         int destScaleX = frame.scaleX * scale;
         int destScaleY = frame.scaleY * scale;
 
-        // Calculate offsets to center the 160x160/320x320 Palm screen inside the physical display
         uint32_t emuPixelWidth = frame.lineWidth * destScaleX;
         uint32_t emuPixelHeight = (frame.lastDirtyLine - frame.firstDirtyLine + 1) * destScaleY;
 
@@ -365,20 +339,16 @@ void MainLoop::UpdateScreen(bool fullRedraw) {
             } break;
         }
 
-        // Flush the fully composited backbuffer to the hardware screen
         memcpy(fbp, g_backbuffer.data(), g_backbuffer.size());
     }
 
-    // Precise Frame Pacing
     const long timestamp = Platform::GetMilliseconds();
     long elapsed = timestamp - lastScreenRefreshAt;
 
-    // Only sleep if drawing finished faster than our GRACE_TIME
     if (elapsed < SCREEN_REFRESH_GRACE_TIME && elapsed >= 0) {
         long sleepTimeMs = SCREEN_REFRESH_GRACE_TIME - elapsed;
         usleep(sleepTimeMs * 1000);
     }
 
-    // Update the refresh timer AFTER the sleep to prevent emulator speed drift
     lastScreenRefreshAt = Platform::GetMilliseconds();
 }
