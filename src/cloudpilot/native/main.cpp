@@ -156,7 +156,9 @@ void run(const Options& options) {
     ScreenDimensions::Kind screenDimensionsKind = gSession->GetDevice().GetScreenDimensions();
     ScreenDimensions screenDimensions(screenDimensionsKind);
 
-    int scale = 2;
+    int scale = screenDimensionsKind == ScreenDimensions::screen160x160
+                    ? (options.smallWindow ? 2 : 3)
+                    : (options.smallWindow ? 1 : 2);
 
     initFB();
 

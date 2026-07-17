@@ -64,6 +64,13 @@ inline void DrawScaledBlock(std::vector<uint8_t>& bg, uint32_t x, uint32_t y, in
     }
 }
 
+inline uint32_t SwapRedBlue32(uint32_t color) {
+    // Keeps Alpha/Padding and Green intact, swaps Red and Blue bytes
+    return (color & 0xFF00FF00) |          // Mask Alpha and Green
+           ((color & 0x00FF0000) >> 16) |  // Move Red down to Blue
+           ((color & 0x000000FF) << 16);   // Move Blue up to Red
+}
+
 MainLoop::MainLoop(uint8_t* fbp, struct fb_var_screeninfo vinfo, struct fb_fix_screeninfo finfo,
                    int scale)
     : fbp(fbp),
@@ -147,13 +154,12 @@ void MainLoop::PollTouch() {
 }
 
 void MainLoop::ProcessPalmTouch(int phys_x, int phys_y, bool pen_down) {
-    uint32_t emuPixelWidth = 160 * scale;
-    uint32_t emuPixelHeight = 160 * scale;
+    uint32_t emuPixelWidth = screenDimensions.Width() * scale;
+    uint32_t emuPixelHeight = screenDimensions.Height() * scale;
 
     uint32_t drawOffsetX =
         vinfo.xoffset + ((vinfo.xres > emuPixelWidth) ? (vinfo.xres - emuPixelWidth) / 2 : 0);
-    uint32_t drawOffsetY =
-        vinfo.yoffset + ((vinfo.yres > emuPixelHeight) ? (vinfo.yres - emuPixelHeight) / 2 : 0);
+    uint32_t drawOffsetY = 0;
 
     int relative_x = phys_x - drawOffsetX;
     int relative_y = phys_y - drawOffsetY;
@@ -242,13 +248,13 @@ void MainLoop::UpdateScreen(bool fullRedraw) {
         int destScaleX = frame.scaleX * scale;
         int destScaleY = frame.scaleY * scale;
 
-        uint32_t emuPixelWidth = frame.lineWidth * destScaleX;
-        uint32_t emuPixelHeight = (frame.lastDirtyLine - frame.firstDirtyLine + 1) * destScaleY;
+        uint32_t fullEmuPixelWidth = screenDimensions.Width() * destScaleX;
+        uint32_t fullEmuPixelHeight = screenDimensions.Height() * destScaleY;
 
         uint32_t drawOffsetX =
-            vinfo.xoffset + ((vinfo.xres > emuPixelWidth) ? (vinfo.xres - emuPixelWidth) / 2 : 0);
-        uint32_t drawOffsetY =
-            vinfo.yoffset + ((vinfo.yres > emuPixelHeight) ? (vinfo.yres - emuPixelHeight) / 2 : 0);
+            vinfo.xoffset +
+            ((vinfo.xres > fullEmuPixelWidth) ? (vinfo.xres - fullEmuPixelWidth) / 2 : 0);
+        uint32_t drawOffsetY = 0;
 
         switch (frame.bpp) {
             case 1: {
@@ -317,13 +323,15 @@ void MainLoop::UpdateScreen(bool fullRedraw) {
                     }
                 }
             } break;
-
             case 24: {
                 for (uint32 y = frame.firstDirtyLine; y <= frame.lastDirtyLine; y++) {
                     uint32_t* lineStart =
                         (uint32_t*)(buffer + y * frame.bytesPerLine + 4 * frame.margin);
                     for (uint32 x = 0; x < frame.lineWidth; x++) {
                         uint32 color32 = lineStart[x];
+
+                        // --- NEW: Swap Red and Blue channels ---
+                        color32 = SwapRedBlue32(color32);
 
                         if (vinfo.bits_per_pixel == 32) {
                             DrawScaledBlock<uint32_t>(g_backbuffer, x, y, destScaleX, destScaleY,
