@@ -42,3 +42,4 @@ Makefile.local
 __pycache__
 .vscode/.ropeproject
 .mypy_cache
+log.txt

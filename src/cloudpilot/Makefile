@@ -184,10 +184,6 @@ SOURCE_CXX_NATIVE = \
 	native/MainLoop.cpp \
 	native/Silkscreen.cpp \
 	native/util.cpp \
-	native/EventHandler.cpp \
-	native/Commands.cpp \
-	native/proxyClientWs.cpp \
-	native/proxyClientNative.cpp \
 	native/ProxyHandler.cpp \
 	native/GdbStub.cpp \
 	native/ElfParser.cpp \

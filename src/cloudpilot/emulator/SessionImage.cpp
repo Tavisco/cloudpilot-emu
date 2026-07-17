@@ -179,8 +179,11 @@ bool SessionImage::GrowSerializationBuffer(mz_stream_s& stream) {
         COMPRESSED_IMAGE_GROW_LIMIT)
         return false;
 
-    size_t growTo = min(((stream.total_out + stream.avail_out + UNCOMPRESSED_HEADER_SIZE) * 3) / 2,
-                        COMPRESSED_IMAGE_GROW_LIMIT);
+    size_t growTo = std::min(
+        (static_cast<size_t>(stream.total_out) + stream.avail_out + UNCOMPRESSED_HEADER_SIZE) * 3 /
+            2,
+        static_cast<size_t>(COMPRESSED_IMAGE_GROW_LIMIT));
+
     unique_ptr<uint8[]> newBuffer = make_unique<uint8[]>(growTo);
 
     memcpy(newBuffer.get(), serializationBuffer.get(), UNCOMPRESSED_HEADER_SIZE + stream.total_out);
